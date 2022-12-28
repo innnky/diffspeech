@@ -78,8 +78,8 @@ class Preprocessor:
         val = list()
         n_frames = 0
         max_seq_len = -float('inf')
-        mel_min = np.ones(80) * float('inf')
-        mel_max = np.ones(80) * -float('inf')
+        mel_min = np.ones(128) * float('inf')
+        mel_max = np.ones(128) * -float('inf')
         f0s = []
         energy_scaler = StandardScaler()
 
@@ -209,25 +209,33 @@ class Preprocessor:
             return None
 
         # Read and trim wav files
-        wav, _ = librosa.load(wav_path)
+        wav, _ = librosa.load(wav_path, sr=self.sampling_rate)
         wav = wav[
             int(self.sampling_rate * start) : int(self.sampling_rate * end)
         ].astype(np.float32)
 
         # Read raw text
-        with open(text_path, "r") as f:
-            raw_text = f.readline().strip("\n")
+        raw_text = "啊"
 
         # Compute mel-scale spectrogram and energy
-        mel_spectrogram, energy = Audio.tools.get_mel_from_wav(wav, self.STFT)
+        try:
+            mel_spectrogram, energy = Audio.tools.get_mel_from_wav(wav, self.STFT)
+        except:
+            return None
         mel_spectrogram = mel_spectrogram[:, : sum(duration)]
         energy = energy[: sum(duration)]
-
+        assert mel_spectrogram.shape[-1] == sum(duration)
         # Compute pitch
         if self.with_f0:
-            f0, pitch = self.get_pitch(wav, mel_spectrogram.T)
+            try:
+                f0, pitch = self.get_pitch(wav, mel_spectrogram.T)
+            except BinarizationError:
+                return None
             if self.with_f0cwt:
-                cwt_spec, cwt_scales, f0cwt_mean_std = self.get_f0cwt(f0)
+                try:
+                    cwt_spec, cwt_scales, f0cwt_mean_std = self.get_f0cwt(f0)
+                except:
+                    return None
 
         # Save files
         dur_filename = "{}-duration-{}.npy".format(speaker, basename)
@@ -278,9 +286,18 @@ class Preprocessor:
         start_time = 0
         end_time = 0
         end_idx = 0
+        last_end = 0
+
         for t in tier._objects:
             s, e, p = t.start_time, t.end_time, t.text
-
+            if last_end != s:
+                durations.append(
+                    int(
+                        np.round(s * self.sampling_rate / self.hop_length)
+                        - np.round(last_end * self.sampling_rate / self.hop_length)
+                    )
+                )
+                phones.append("spn")
             # Trim leading silences
             if phones == []:
                 if p in sil_phones:
@@ -303,6 +320,7 @@ class Preprocessor:
                     - np.round(s * self.sampling_rate / self.hop_length)
                 )
             )
+            last_end = e
 
         # Trim tailing silences
         phones = phones[:end_idx]

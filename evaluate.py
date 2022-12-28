@@ -22,7 +22,7 @@ def evaluate(args, model, step, configs, logger=None, vocoder=None, losses=None)
     dataset = Dataset(
         "val.txt", preprocess_config, train_config, sort=False, drop_last=False
     )
-    batch_size = train_config["optimizer"]["batch_size"]
+    batch_size = 2
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -91,13 +91,15 @@ def evaluate(args, model, step, configs, logger=None, vocoder=None, losses=None)
             logger,
             audio=wav_reconstruction,
             sampling_rate=sampling_rate,
-            tag="Validation/step_{}_{}_reconstructed".format(step, tag),
+            tag="Validation/{}_reconstructed".format(tag),
+            step=step
         )
         log(
             logger,
             audio=wav_prediction,
             sampling_rate=sampling_rate,
-            tag="Validation/step_{}_{}_synthesized".format(step, tag),
+            tag="Validation/{}_synthesized".format(tag),
+            step=step
         )
 
     return message

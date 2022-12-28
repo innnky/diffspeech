@@ -136,13 +136,15 @@ def main(args, configs):
                         train_logger,
                         audio=wav_reconstruction,
                         sampling_rate=sampling_rate,
-                        tag="Training/step_{}_{}_reconstructed".format(step, tag),
+                        tag="Training/reconstructed",
+                        step=step
                     )
                     log(
                         train_logger,
                         audio=wav_prediction,
                         sampling_rate=sampling_rate,
-                        tag="Training/step_{}_{}_synthesized".format(step, tag),
+                        tag="Training/synthesized",
+                        step=step
                     )
 
                 if step % val_step == 0:
@@ -155,6 +157,9 @@ def main(args, configs):
                     model.train()
 
                 if step % save_step == 0:
+                    rmpath = os.path.join(train_config["path"]["ckpt_path"], "{}.pth.tar".format(step-3*save_step), )
+                    os.system(f"rm {rmpath}")
+
                     torch.save(
                         {
                             "model": model.module.state_dict(),

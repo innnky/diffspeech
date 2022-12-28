@@ -81,43 +81,70 @@ def denorm_f0(f0, uv, config, pitch_padding=None, min=None, max=None):
     return f0
 
 
-def get_pitch(wav_data, mel, config):
-    """
+def get_pitch(x, mel, config,f0_up_key=0):
+    p_len = len(mel)
+    time_step = 512 / 44100 * 1000
+    f0_min = 100
+    f0_max = 1100
+    f0_mel_min = 1127 * np.log(1 + f0_min / 700)
+    f0_mel_max = 1127 * np.log(1 + f0_max / 700)
 
-    :param wav_data: [T]
-    :param mel: [T, 80]
-    :param config:
-    :return:
-    """
-    sampling_rate = config["preprocessing"]["audio"]["sampling_rate"]
-    hop_length = config["preprocessing"]["stft"]["hop_length"]
-    time_step = hop_length / sampling_rate * 1000
-    f0_min = 80
-    f0_max = 750
-
-    if hop_length == 128:
-        pad_size = 4
-    elif hop_length  == 256:
-        pad_size = 2
-    else:
-        assert False
-
-    f0 = parselmouth.Sound(wav_data, sampling_rate).to_pitch_ac(
+    f0 = parselmouth.Sound(x, 44100).to_pitch_ac(
         time_step=time_step / 1000, voicing_threshold=0.6,
-        pitch_floor=f0_min, pitch_ceiling=f0_max).selected_array["frequency"]
-    lpad = pad_size * 2
-    rpad = len(mel) - len(f0) - lpad
-    f0 = np.pad(f0, [[lpad, rpad]], mode="constant")
-    # mel and f0 are extracted by 2 different libraries. we should force them to have the same length.
-    # Attention: we find that new version of some libraries could cause ``rpad'' to be a negetive value...
-    # Just to be sure, we recommend users to set up the same environments as them in requirements_auto.txt (by Anaconda)
-    delta_l = len(mel) - len(f0)
-    assert np.abs(delta_l) <= 8
-    if delta_l > 0:
-        f0 = np.concatenate([f0, [f0[-1]] * delta_l], 0)
-    f0 = f0[:len(mel)]
-    pitch_coarse = f0_to_coarse(f0)
-    return f0, pitch_coarse
+        pitch_floor=f0_min, pitch_ceiling=f0_max).selected_array['frequency']
+
+    pad_size=(p_len - len(f0) + 1) // 2
+    if(pad_size>0 or p_len - len(f0) - pad_size>0):
+        f0 = np.pad(f0,[[pad_size,p_len - len(f0) - pad_size]], mode='constant')
+
+    f0bak = f0.copy()
+    f0 *= pow(2, f0_up_key / 12)
+    f0_mel = 1127 * np.log(1 + f0 / 700)
+    f0_mel[f0_mel > 0] = (f0_mel[f0_mel > 0] - f0_mel_min) * 254 / (f0_mel_max - f0_mel_min) + 1
+    f0_mel[f0_mel <= 1] = 1
+    f0_mel[f0_mel > 255] = 255
+    f0_coarse = np.rint(f0_mel).astype(np.int)
+    return f0bak, f0_coarse
+#
+# def get_pitch(wav_data, mel, config):
+#     """
+#
+#     :param wav_data: [T]
+#     :param mel: [T, 80]
+#     :param config:
+#     :return:
+#     """
+#     sampling_rate = config["preprocessing"]["audio"]["sampling_rate"]
+#     hop_length = config["preprocessing"]["stft"]["hop_length"]
+#     time_step = hop_length / sampling_rate * 1000
+#     f0_min = 80
+#     f0_max = 750
+#
+#     f0 = parselmouth.Sound(wav_data, sampling_rate).to_pitch_ac(
+#         time_step=time_step / 1000, voicing_threshold=0.6,
+#         pitch_floor=f0_min, pitch_ceiling=f0_max).selected_array["frequency"]
+#
+#     if hop_length == 128:
+#         pad_size = 4
+#     elif hop_length  == 256:
+#         pad_size = 2
+#     else:
+#         p_len =  len(mel)
+#         pad_size = (p_len - len(f0) + 1) // 2
+#
+#     lpad = pad_size * 2
+#     rpad = len(mel) - len(f0) - lpad
+#     f0 = np.pad(f0, [[lpad, rpad]], mode="constant")
+#     # mel and f0 are extracted by 2 different libraries. we should force them to have the same length.
+#     # Attention: we find that new version of some libraries could cause ``rpad'' to be a negetive value...
+#     # Just to be sure, we recommend users to set up the same environments as them in requirements_auto.txt (by Anaconda)
+#     delta_l = len(mel) - len(f0)
+#     assert np.abs(delta_l) <= 8
+#     if delta_l > 0:
+#         f0 = np.concatenate([f0, [f0[-1]] * delta_l], 0)
+#     f0 = f0[:len(mel)]
+#     pitch_coarse = f0_to_coarse(f0)
+#     return f0, pitch_coarse
 
 
 def expand_f0_ph(f0, mel2ph, config):

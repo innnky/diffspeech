@@ -112,11 +112,6 @@ def log(
         logger.add_scalar("Loss/total_loss", losses[0], step)
         logger.add_scalar("Loss/mel_loss", losses[1], step)
         logger.add_scalar("Loss/noise_loss", losses[2], step)
-        for k, v in losses[3].items():
-            logger.add_scalar("Loss/{}_loss".format(k), v, step)
-        logger.add_scalar("Loss/energy_loss", losses[4], step)
-        for k, v in losses[5].items():
-            logger.add_scalar("Loss/{}_loss".format(k), v, step)
 
     if lr is not None:
         logger.add_scalar("Training/learning_rate", lr, step)
@@ -130,6 +125,7 @@ def log(
             tag,
             audio / max(abs(audio)),
             sample_rate=sampling_rate,
+            global_step=step
         )
 
 
@@ -163,6 +159,8 @@ def synth_one_sample(args, targets, predictions, vocoder, model_config, preproce
     mel_target = targets[6][0, :mel_len].float().detach().transpose(0, 1)
     duration = targets[11][0, :src_len].int().detach().cpu().numpy()
     figs = {}
+    f0_pred = None
+    f0 = None
     if use_pitch_embed:
         pitch_prediction, pitch_target = predictions[4], targets[9]
         f0 = pitch_target["f0"]
@@ -224,20 +222,9 @@ def synth_one_sample(args, targets, predictions, vocoder, model_config, preproce
     )
 
     if vocoder is not None:
-        from .model import vocoder_infer
+        wav_reconstruction = vocoder.spec2wav(mel_target.cpu().numpy().T, f0=f0[0, :mel_len].detach().cpu().numpy())
+        wav_prediction = vocoder.spec2wav(mel_prediction.cpu().numpy().T, f0=f0_pred[0, :mel_len].detach().cpu().numpy())
 
-        wav_reconstruction = vocoder_infer(
-            mel_target.unsqueeze(0),
-            vocoder,
-            model_config,
-            preprocess_config,
-        )[0]
-        wav_prediction = vocoder_infer(
-            mel_prediction.unsqueeze(0),
-            vocoder,
-            model_config,
-            preprocess_config,
-        )[0]
     else:
         wav_reconstruction = wav_prediction = None
 

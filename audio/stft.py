@@ -11,7 +11,9 @@ from audio.audio_processing import (
     window_sumsquare,
 )
 
-
+device = "cuda" if torch.cuda.is_available() else "cpu"
+if torch.has_mps:
+    device = "mps"
 class STFT(torch.nn.Module):
     """adapted from Prem Seetharaman's https://github.com/pseeth/pytorch-stft"""
 
@@ -54,7 +56,7 @@ class STFT(torch.nn.Module):
         num_samples = input_data.size(1)
 
         self.num_samples = num_samples
-
+        
         # similar to librosa, reflect-pad the input
         input_data = input_data.view(num_batches, 1, num_samples)
         input_data = F.pad(
@@ -65,8 +67,8 @@ class STFT(torch.nn.Module):
         input_data = input_data.squeeze(1)
 
         forward_transform = F.conv1d(
-            input_data.cuda(),
-            torch.autograd.Variable(self.forward_basis, requires_grad=False).cuda(),
+            input_data.to(device),
+            torch.autograd.Variable(self.forward_basis, requires_grad=False).to(device),
             stride=self.hop_length,
             padding=0,
         ).cpu()
@@ -108,7 +110,7 @@ class STFT(torch.nn.Module):
             window_sum = torch.autograd.Variable(
                 torch.from_numpy(window_sum), requires_grad=False
             )
-            window_sum = window_sum.cuda() if magnitude.is_cuda else window_sum
+            window_sum = window_sum.to(device) if magnitude.is_cuda else window_sum
             inverse_transform[:, :, approx_nonzero_indices] /= window_sum[
                 approx_nonzero_indices
             ]
